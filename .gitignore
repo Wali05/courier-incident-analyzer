@@ -1,0 +1,6 @@
+﻿__pycache__/
+*.pyc
+.env
+eval_results.csv
+node_modules/
+.next/
