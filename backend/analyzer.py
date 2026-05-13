@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -34,7 +34,7 @@ Escalation rules you MUST follow:
 Courier-specific context:
 - WAL records have 0xDEADBEEF magic and CRC32-IEEE checksum
 - ErrCRCMismatch means a torn write was detected on recovery
-- channelCap is 1024 â€” replay drops overflow messages silently
+- channelCap is 1024 — replay drops overflow messages silently
 - DLQ queues follow the format: queuename.dlq
 - Temp file for compaction: path + ".tmp" (e.g. orders.wal.tmp)
 - Key env vars: COURIER_WAL_DIR, COURIER_DISPATCH_TIMEOUT,
@@ -57,12 +57,12 @@ exit status 1
 
 EXAMPLE 1 OUTPUT:
 {
-  "root_cause": "Torn write detected in WAL â€” CRC32 mismatch during crash recovery in ReadAll; broker cannot reconstruct queue state and exits",
+  "root_cause": "Torn write detected in WAL — CRC32 mismatch during crash recovery in ReadAll; broker cannot reconstruct queue state and exits",
   "affected_component": "internal/wal/wal.go",
   "severity": "CRITICAL",
   "confidence": 95,
   "auto_recoverable": false,
-  "suggested_fix": "Check disk space under COURIER_WAL_DIR. WAL recovery stops before the corrupt record â€” all prior records are safe. Remove or truncate the corrupt WAL file, then restart.",
+  "suggested_fix": "Check disk space under COURIER_WAL_DIR. WAL recovery stops before the corrupt record — all prior records are safe. Remove or truncate the corrupt WAL file, then restart.",
   "escalate": true,
   "runbook": ["Check disk space: df -h data/wal", "Inspect COURIER_WAL_DIR for the named queue WAL file", "Remove corrupt WAL if messages are expendable, or restore from backup", "Restart broker: go run ./cmd/broker", "Verify recovery: curl http://localhost:9090/healthz"],
   "clarifying_question": "Is the data in the orders queue expendable, or does it need to be recovered from a backup before truncating the WAL?"
@@ -120,14 +120,18 @@ def analyze(log_input: str) -> IncidentReport:
         response = model.generate_content(prompt)
 
         text = response.text.strip()
-        text = text.replace("```json", "").replace("```", "").strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        text = text.strip()
 
         data = json.loads(text)
         return IncidentReport(**data)
 
     except Exception:
         return IncidentReport(
-            root_cause="Analysis failed â€” manual review required",
+            root_cause="Analysis failed — manual review required",
             affected_component="unknown",
             severity="HIGH",
             confidence=0,
@@ -141,4 +145,3 @@ def analyze(log_input: str) -> IncidentReport:
             ],
             clarifying_question="What component produced this log?",
         )
-
