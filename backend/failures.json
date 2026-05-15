@@ -1,0 +1,62 @@
+﻿[
+    {
+        "id":  1,
+        "name":  "wal_crc32_mismatch",
+        "raw_log":  "2026/05/24 07:43:17 ERROR queue: WAL replay failed for queue \"orders\": wal: CRC mismatch\ngoroutine 1 [running]:\ngithub.com/Wali05/courier/internal/wal.ReadAll(...)\n        /app/internal/wal/wal.go:298 +0x1c7\ngithub.com/Wali05/courier/internal/queue.NewQueue(...)\n        /app/internal/queue/queue.go:80 +0x93\ngithub.com/Wali05/courier/internal/queue.(*Manager).Get(...)\n        /app/internal/queue/queue.go:197 +0x112\nmain.main()\n        /app/cmd/broker/main.go:70 +0x2a4\nexit status 1",
+        "correct_root_cause":  "ReadAll encountered a CRC32 mismatch mid-file during WAL replay in NewQueue, indicating a torn write left a corrupt record at the boundary; the broker cannot enqueue the recovered messages and exits.",
+        "correct_component":  "internal/wal/wal.go",
+        "correct_severity":  "CRITICAL",
+        "auto_recoverable":  false,
+        "correct_reasoning":  "A CRC mismatch during startup WAL replay means the broker cannot reconstruct queue state; messages after the torn-write boundary are permanently unrecoverable without operator intervention to truncate or restore from backup, so the severity is CRITICAL.",
+        "recovery_action":  [
+                                "Identify the corrupt WAL file under COURIER_WAL_DIR (e.g. data/wal/orders.wal) by inspecting the log for the queue name.",
+                                "Truncate the WAL at the last valid record boundary using a hex editor or a custom tool that re-reads records up to the first CRC mismatch and writes them to a new file.",
+                                "Restore the truncated WAL file in place and restart the broker; monitor logs to confirm ReadAll completes without ErrCRCMismatch."
+                            ]
+    },
+    {
+        "id":  2,
+        "name":  "wal_dir_missing",
+        "raw_log":  "2026/05/24 14:23:09 ERROR queue: failed to open WAL: open data/wal/payments.wal: no such file or directory\ngoroutine 1 [running]:\ngithub.com/Wali05/courier/internal/wal.Open(...)\n        /app/internal/wal/wal.go:205 +0x61\ngithub.com/Wali05/courier/internal/queue.NewQueue(...)\n        /app/internal/queue/queue.go:67 +0x77\ngithub.com/Wali05/courier/internal/queue.(*Manager).Get(...)\n        /app/internal/queue/queue.go:197 +0x112\nmain.main()\n        /app/cmd/broker/main.go:70 +0x2a4\nexit status 1",
+        "correct_root_cause":  "The WAL directory specified by COURIER_WAL_DIR does not exist and was not pre-created; wal.Open calls os.OpenFile which fails with \u0027no such file or directory\u0027, preventing NewQueue from initialising and causing the broker to exit.",
+        "correct_component":  "internal/wal/wal.go",
+        "correct_severity":  "CRITICAL",
+        "auto_recoverable":  false,
+        "correct_reasoning":  "Without a writable WAL directory the broker cannot persist any messages and cannot start at all; this is a configuration/deployment error that requires operator action to create the directory, so it is CRITICAL.",
+        "recovery_action":  [
+                                "Create the WAL directory referenced by COURIER_WAL_DIR (default: data/wal) with appropriate permissions before starting the broker.",
+                                "Verify the directory is writable by the broker process user and that any volume mounts (in Docker/Kubernetes) are correctly configured.",
+                                "Restart the broker and confirm the log shows \u0027broker: configuration loaded\u0027 without any WAL open errors."
+                            ]
+    },
+    {
+        "id":  3,
+        "name":  "dispatch_timeout_retry",
+        "raw_log":  "2026/05/24 09:51:33 ERROR retry: failed to nack timed-out message msg_id=a3f8c1d2-04bb-4e7a-b91c-38d7e6f02a11 consumer=consumer-7 error=\u003cnil\u003e\n2026/05/24 09:51:33 INFO retry: timed out messages count=1 total_in_flight=4\ngoroutine 12 [running]:\ngithub.com/Wali05/courier/internal/retry.(*Scanner).scan(...)\n        /app/internal/retry/scanner.go:123 +0x88\ngithub.com/Wali05/courier/internal/retry.(*Scanner).loop(...)\n        /app/internal/retry/scanner.go:110 +0x54",
+        "correct_root_cause":  "The retry Scanner detected that message a3f8c1d2 remained in-flight longer than COURIER_DISPATCH_TIMEOUT; it called ackmgr.Nack which re-enqueued the message via Queue.Enqueue with an incremented RetryCount, so delivery will be reattempted.",
+        "correct_component":  "internal/retry/scanner.go",
+        "correct_severity":  "MEDIUM",
+        "auto_recoverable":  true,
+        "correct_reasoning":  "Dispatch timeouts are a normal transient failure path explicitly handled by the retry scanner; the message is re-enqueued with incremented RetryCount and delivery continues automatically, so the severity is MEDIUM.",
+        "recovery_action":  [
+                                "Check consumer health and gRPC stream latency for consumer-7 to determine why the ACK was not received within COURIER_DISPATCH_TIMEOUT.",
+                                "Consider increasing COURIER_DISPATCH_TIMEOUT if consumer processing is legitimately slow, or reducing payload size to speed up processing.",
+                                "Monitor courier_retry_timeouts_total metric to confirm the retry rate returns to baseline after the consumer issue is resolved."
+                            ]
+    },
+    {
+        "id":  4,
+        "name":  "max_retries_exhausted_dlq",
+        "raw_log":  "2026/05/24 18:07:41 ERROR ackmgr: routing dead message to DLQ msg_id=b7e2d9a0-c341-4f83-ae12-91c04f7b3318 queue=orders dlq=orders.dlq retry_count=3\ngoroutine 12 [running]:\ngithub.com/Wali05/courier/internal/ackmgr.(*Manager).Nack(...)\n        /app/internal/ackmgr/ackmgr.go:127 +0xb9\ngithub.com/Wali05/courier/internal/retry.(*Scanner).scan(...)\n        /app/internal/retry/scanner.go:123 +0x88\ngithub.com/Wali05/courier/internal/retry.(*Scanner).loop(...)\n        /app/internal/retry/scanner.go:110 +0x54",
+        "correct_root_cause":  "Message b7e2d9a0 on the \u0027orders\u0027 queue had its RetryCount reach COURIER_MAX_RETRIES (3); Manager.Nack called msg.IsDead which returned true, so the message status was set to StatusDead and it was enqueued onto \u0027orders.dlq\u0027 via queue.Manager.Get.",
+        "correct_component":  "internal/ackmgr/ackmgr.go",
+        "correct_severity":  "HIGH",
+        "auto_recoverable":  false,
+        "correct_reasoning":  "A message reaching the DLQ means it has failed delivery COURIER_MAX_RETRIES times and will not be retried automatically; operator investigation is required to understand the root cause and replay or discard the dead-lettered message, so the severity is HIGH.",
+        "recovery_action":  [
+                                "Inspect the orders.dlq WAL file and identify the payload of message b7e2d9a0 to understand why it failed consistently.",
+                                "Diagnose the consumer-side processing error (e.g. schema mismatch, downstream service unavailability) that caused repeated NACKs.",
+                                "After fixing the consumer, replay the message by re-publishing it to the \u0027orders\u0027 queue and drain \u0027orders.dlq\u0027 once the root cause is resolved."
+                            ]
+    }
+]
