@@ -58,5 +58,50 @@
                                 "Diagnose the consumer-side processing error (e.g. schema mismatch, downstream service unavailability) that caused repeated NACKs.",
                                 "After fixing the consumer, replay the message by re-publishing it to the \u0027orders\u0027 queue and drain \u0027orders.dlq\u0027 once the root cause is resolved."
                             ]
+    },
+    {
+        "id":  5,
+        "name":  "consumer_stream_closed_mid_delivery",
+        "raw_log":  "2026/05/24 03:47:52 WARN dispatcher: consumer stream closed during send msg_id=c9a1f3b4-7d56-4891-b023-5e8f2d1c9a34 consumer=consumer-2 queue=notifications\ngoroutine 19 [running]:\ngithub.com/Wali05/courier/internal/dispatcher.(*Dispatcher).dispatch(...)\n        /app/internal/dispatcher/dispatcher.go:122 +0xd3\ngithub.com/Wali05/courier/internal/dispatcher.(*Dispatcher).EnsureRunning.func1(...)\n        /app/internal/dispatcher/dispatcher.go:68 +0x41",
+        "correct_root_cause":  "The consumer gRPC stream for consumer-2 closed between Register being called and the message being received; the message is tracked in Manager.inFlight but never consumed, and will be re-enqueued automatically when Scanner.scan detects it has exceeded COURIER_DISPATCH_TIMEOUT.",
+        "correct_component":  "internal/dispatcher/dispatcher.go",
+        "correct_severity":  "LOW",
+        "auto_recoverable":  true,
+        "correct_reasoning":  "A mid-delivery stream disconnect is a transient network event; the AckManager will timeout the in-flight entry and Scanner.Nack will re-enqueue the message for delivery to another consumer, so no data is permanently lost and the severity is LOW.",
+        "recovery_action":  [
+                                "Confirm the message c9a1f3b4 is re-enqueued by checking courier_retry_timeouts_total and courier_queue_depth_total for the \u0027notifications\u0027 queue after COURIER_DISPATCH_TIMEOUT elapses.",
+                                "Investigate why consumer-2\u0027s gRPC stream was closed (network interruption, client-side timeout, or process crash).",
+                                "Ensure consumers implement reconnect-with-backoff logic to reduce the frequency of mid-delivery disconnects."
+                            ]
+    },
+    {
+        "id":  6,
+        "name":  "wal_compaction_rename_failed",
+        "raw_log":  "2026/05/24 11:58:29 ERROR queue: WAL compaction rename failed src=data/wal/orders.wal.tmp dst=data/wal/orders.wal error=rename data/wal/orders.wal.tmp data/wal/orders.wal: cross-device link\ngoroutine 7 [running]:\ngithub.com/Wali05/courier/internal/wal.Compact(...)\n        /app/internal/wal/wal.go:340 +0x1a2\ngithub.com/Wali05/courier/internal/queue.(*Queue).WriteTombstone(...)\n        /app/internal/queue/queue.go:144 +0x7c",
+        "correct_root_cause":  "wal.Compact wrote the compacted records to \u0027orders.wal.tmp\u0027 (path + \".tmp\") but the final os.Rename call failed with a cross-device link error, leaving the original WAL uncompacted; the broker continues running with the uncompacted file.",
+        "correct_component":  "internal/wal/wal.go",
+        "correct_severity":  "MEDIUM",
+        "auto_recoverable":  true,
+        "correct_reasoning":  "A failed compaction rename leaves the original WAL intact and the broker continues processing normally; the only consequence is wasted disk space from dead entries, and compaction will be reattempted; this is MEDIUM severity.",
+        "recovery_action":  [
+                                "Remove the leftover \u0027orders.wal.tmp\u0027 file to avoid stale data accumulation on disk.",
+                                "Ensure COURIER_WAL_DIR is on the same filesystem as any temp directories to prevent cross-device rename failures; avoid bind-mounting WAL dirs across different block devices.",
+                                "Monitor disk usage for the WAL directory and manually trigger compaction or restart the broker to reattempt compaction once the filesystem issue is fixed."
+                            ]
+    },
+    {
+        "id":  7,
+        "name":  "wal_partial_write_last_record",
+        "raw_log":  "2026/05/24 22:14:53 ERROR queue: WAL replay stopped at torn write boundary queue=payments recovered=47 lost=1 error=wal: CRC mismatch\ngoroutine 1 [running]:\ngithub.com/Wali05/courier/internal/wal.ReadAll(...)\n        /app/internal/wal/wal.go:299 +0x1c7\ngithub.com/Wali05/courier/internal/queue.NewQueue(...)\n        /app/internal/queue/queue.go:80 +0x93\ngithub.com/Wali05/courier/internal/queue.(*Manager).Get(...)\n        /app/internal/queue/queue.go:197 +0x112\nmain.main()\n        /app/cmd/broker/main.go:70 +0x2a4",
+        "correct_root_cause":  "A process crash occurred during WAL.Append\u0027s file.Sync for the last record in the \u0027payments\u0027 WAL; ReadAll stops at the CRC mismatch boundary and returns the prior 47 records, but the final record\u0027s payload is irrecoverably lost.",
+        "correct_component":  "internal/wal/wal.go",
+        "correct_severity":  "HIGH",
+        "auto_recoverable":  false,
+        "correct_reasoning":  "Although prior records are recovered and the broker can start, the last message in the WAL is permanently lost due to the partial fsync; producers will not automatically re-send it without external intervention, making this HIGH severity.",
+        "recovery_action":  [
+                                "Confirm that exactly one message is missing by correlating the producer\u0027s send log with the recovered record count from the WAL replay log.",
+                                "Notify the upstream producer system to re-publish the lost message; the broker itself has no mechanism to recover data past the CRC mismatch boundary.",
+                                "Consider enabling O_SYNC or using WAL pre-allocation strategies to reduce the torn-write window on crash, and ensure the host uses a journaling filesystem."
+                            ]
     }
 ]
