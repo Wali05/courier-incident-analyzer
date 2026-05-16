@@ -1,11 +1,16 @@
-﻿from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from models import AnalyzeRequest, IncidentReport
 from analyzer import analyze
 
 app = FastAPI()
 
-# TODO: add cors if frontend needs it
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
@@ -19,4 +24,3 @@ def analyze_endpoint(request: AnalyzeRequest):
         return analyze(request.log_input)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
