@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import pandas as pd
 from analyzer import analyze
@@ -48,7 +48,7 @@ def main():
     print(f"\nResults saved to {output_path}\n")
 
     # Build summary table per bucket
-    bucket_order = ["Low (<70)", "Medium (70-89)", "High (90-100)"]
+    bucket_order = ["High (90-100)", "Medium (70-89)", "Low (<70)"]
     summary_rows = []
 
     for bucket in bucket_order:
@@ -111,15 +111,14 @@ def main():
         high_acc = high_rows["is_correct"].mean()
         if len(medium_rows) == 0 or high_acc > medium_rows["is_correct"].mean():
             print(
-                "KEY FINDING: Model is well-calibrated â€” high confidence correlates with accuracy"
+                "KEY FINDING: Model is well-calibrated — high confidence correlates with accuracy"
             )
         else:
             print(
-                "KEY FINDING: Model shows overconfidence â€” high confidence does NOT reliably "
+                "KEY FINDING: Model shows overconfidence — high confidence does NOT reliably "
                 "predict accuracy (same pattern found in bookkeeping eval)"
             )
 
 
 if __name__ == "__main__":
     main()
-
