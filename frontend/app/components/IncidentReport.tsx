@@ -1,4 +1,4 @@
-﻿interface IncidentData {
+interface IncidentData {
   root_cause: string;
   affected_component: string;
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -48,7 +48,7 @@ export default function IncidentReport({ data }: { data: IncidentData }) {
         width: "100%",
       }}
     >
-      {/* 1. TOP ROW â€” Severity badge + Confidence bar */}
+      {/* 1. TOP ROW — Severity badge + Confidence bar */}
       <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         {/* Severity badge */}
         <div>
@@ -96,7 +96,11 @@ export default function IncidentReport({ data }: { data: IncidentData }) {
           >
             <div
               style={{
-                className={`w-[${data.confidence}%] bg-[${sev.fill}] h-full transition-all`},
+                backgroundColor: sev.fill,
+                height: "100%",
+                width: `${data.confidence}%`,
+                borderRadius: "9999px",
+                transition: "width 0.5s ease",
               }}
             />
           </div>
@@ -146,11 +150,11 @@ export default function IncidentReport({ data }: { data: IncidentData }) {
         }}
       >
         {data.auto_recoverable
-          ? "âœ“ Auto-recoverable â€” retry scanner handles this"
-          : "âš  Escalate to human â€” manual intervention required"}
+          ? "✓ Auto-recoverable — retry scanner handles this"
+          : "⚠ Escalate to human — manual intervention required"}
       </div>
 
-      {/* 5. SUGGESTED FIX â€” only when auto_recoverable */}
+      {/* 5. SUGGESTED FIX — only when auto_recoverable */}
       {data.auto_recoverable && (
         <div style={SECTION_STYLE}>
           <span style={LABEL_STYLE}>Suggested Fix</span>
@@ -195,7 +199,7 @@ export default function IncidentReport({ data }: { data: IncidentData }) {
         </ol>
       </div>
 
-      {/* 7. CLARIFYING QUESTION â€” only when escalate=true and not null */}
+      {/* 7. CLARIFYING QUESTION — only when escalate=true and not null */}
       {data.escalate && data.clarifying_question && (
         <div
           style={{
@@ -214,4 +218,3 @@ export default function IncidentReport({ data }: { data: IncidentData }) {
     </div>
   );
 }
-
