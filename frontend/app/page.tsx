@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import IncidentReport from "./components/IncidentReport";
@@ -36,7 +36,22 @@ export default function Home() {
     setError(null);
     setResult(null);
 
-    try { console.log("todo"); } finally {
+    try {
+      const res = await fetch("http://localhost:8000/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ log_input: log }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data: IncidentData = await res.json();
+      setResult(data);
+    } catch {
+      setError("Backend error — is the FastAPI server running on port 8000?");
+    } finally {
       setLoading(false);
     }
   }
@@ -56,10 +71,10 @@ export default function Home() {
             margin: 0,
           }}
         >
-          ðŸ›° Courier Incident Analyzer
+          🛰 Courier Incident Analyzer
         </h1>
         <p style={{ color: "#64748b", fontSize: "13px", marginTop: "4px" }}>
-          Powered by Gemini Â· WAL Â· gRPC Â· Prometheus
+          Powered by Gemini · WAL · gRPC · Prometheus
         </p>
       </div>
 
@@ -207,4 +222,3 @@ export default function Home() {
     </main>
   );
 }
-
