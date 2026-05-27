@@ -6,7 +6,7 @@ from models import IncidentReport
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-3.1-flash-lite")
+model = genai.GenerativeModel("gemini-2.0-flash-lite")
 
 SYSTEM_PROMPT = """You are an expert SRE analyzing error logs from Courier,
 a Go distributed message broker with WAL persistence,
